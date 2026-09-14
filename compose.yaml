@@ -1,0 +1,133 @@
+services:
+  geosandbox_gis_db:
+    image: postgis/postgis:17-master
+    container_name: gis_service_db
+    restart: always
+    user: postgres
+    secrets:
+      - db-password
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=db_gis_geosandbox
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    ports:
+      - "5433:5432"
+    expose:
+      - "5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d db_gis_geosandbox" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - gis-data:/var/lib/postgresql/data
+    networks:
+      - global-network-geosandbox
+
+  geosandbox_auth_db:
+    image: postgres:17
+    container_name: auth_service_db
+    restart: always
+    user: postgres
+    secrets:
+      - db-password
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=db_auth_geosandbox
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    ports:
+      - "5432:5432"
+    expose:
+      - "5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d db_auth_geosandbox" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - auth-data:/var/lib/postgresql/data
+    networks:
+      - global-network-geosandbox
+
+  geosandbox_user_db:
+    image: postgres:17
+    container_name: user_service_db
+    restart: always
+    user: postgres
+    secrets:
+      - db-password
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=db_user_geosandbox
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    ports:
+      - "5434:5432"
+    expose:
+      - "5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d db_user_geosandbox" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - user-data:/var/lib/postgresql/data
+    networks:
+      - global-network-geosandbox
+
+  _geosandbox_redis:
+    image: redis:7-alpine
+    container_name: geosandbox_redis
+    restart: always
+    command: redis-server --requirepass secretredispassword
+    ports:
+      - "6381:6379"
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a secretredispassword ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    networks:
+      - global-network-geosandbox
+
+  _geosandbox_minio:
+    image: minio/minio:latest
+    container_name: geosandbox_minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: geosandbox
+      MINIO_ROOT_PASSWORD: geosandboxminiosecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    expose:
+      - "9000"
+      - "9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - minio-data:/data
+    networks:
+      - global-network-geosandbox
+
+volumes:
+  gis-data:
+  auth-data:
+  user-data:
+  redis-data:
+  minio-data:
+
+secrets:
+  db-password:
+    file: db/password.txt
+
+networks:
+  global-network-geosandbox:
+    external: true
