@@ -93,27 +93,17 @@ services:
     networks:
       - global-network-geosandbox
 
-  geosandbox_minio:
-    image: minio/minio:latest
-    container_name: geosandbox_minio
+  geosandbox_storage:
+    image: rustfs/rustfs:latest
+    container_name: geosandbox_storage
     restart: always
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: geosandbox
-      MINIO_ROOT_PASSWORD: geosandboxminiosecret
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8980:8080" # Jalur S3 API (diakses dari port 8980)
+      - "9710:9001" # Jalur Web UI Console (diakses dari port 9710)
     expose:
-      - "9000"
-      - "9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "8080"
     volumes:
-      - minio-data:/data
+      - rustfs-data:/data
     networks:
       - global-network-geosandbox
 
@@ -122,7 +112,7 @@ volumes:
   auth-data:
   user-data:
   redis-data:
-  minio-data:
+  rustfs-data:
 
 secrets:
   db-password:
