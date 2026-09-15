@@ -74,8 +74,8 @@ services:
     networks:
       - global-network-geosandbox
 
-  _geosandbox_redis:
-    image: redis:7-alpine
+  geosandbox_redis:
+    image: redis:latest
     container_name: geosandbox_redis
     restart: always
     command: redis-server --requirepass secretredispassword
@@ -93,7 +93,7 @@ services:
     networks:
       - global-network-geosandbox
 
-  _geosandbox_minio:
+  geosandbox_minio:
     image: minio/minio:latest
     container_name: geosandbox_minio
     restart: always
