@@ -98,10 +98,10 @@ services:
     container_name: geosandbox_storage
     restart: always
     ports:
-      - "8980:8080" # Jalur S3 API (diakses dari port 8980)
+      - "8980:9000" # Jalur S3 API (diakses dari port 8980)
       - "9710:9001" # Jalur Web UI Console (diakses dari port 9710)
     expose:
-      - "8080"
+      - "9000"
     volumes:
       - rustfs-data:/data
     networks:
