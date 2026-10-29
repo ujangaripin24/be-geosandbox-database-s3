@@ -183,6 +183,7 @@ volumes:
   gis-data:
   auth-data:
   user-data:
+  notif-data:
   redis-data:
   rustfs-data:
 
