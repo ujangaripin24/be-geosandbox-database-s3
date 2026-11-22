@@ -14,7 +14,7 @@ services:
       - POSTGRES_DB=db_gis_geosandbox
       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
     command: >
-      postgres  -c max_connections=20  -c shared_buffers=128MB  -c work_mem=4MB
+      postgres  -c max_connections=20  -c shared_buffers=64MB  -c work_mem=2MB
     ports:
       - "5433:5432"
     expose:
@@ -29,9 +29,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 256M
         reservations:
-          memory: 128M
+          memory: 64M
     networks:
       - global-network-geosandbox
 
@@ -47,7 +47,7 @@ services:
       - POSTGRES_DB=db_auth_geosandbox
       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
     command: >
-      postgres  -c max_connections=20  -c shared_buffers=64MB  -c work_mem=2MB
+      postgres  -c max_connections=20  -c shared_buffers=32MB  -c work_mem=2MB
     ports:
       - "5432:5432"
     expose:
@@ -62,9 +62,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
         reservations:
-          memory: 64M
+          memory: 32M
     networks:
       - global-network-geosandbox
 
@@ -80,7 +80,7 @@ services:
       - POSTGRES_DB=db_user_geosandbox
       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
     command: >
-      postgres  -c max_connections=20  -c shared_buffers=64MB  -c work_mem=2MB
+      postgres  -c max_connections=20  -c shared_buffers=32MB  -c work_mem=2MB
     ports:
       - "5434:5432"
     expose:
@@ -95,9 +95,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
         reservations:
-          memory: 64M
+          memory: 32M
     networks:
       - global-network-geosandbox
 
@@ -113,7 +113,7 @@ services:
       - POSTGRES_DB=db_notif_geosandbox
       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
     command: >
-      postgres  -c max_connections=20  -c shared_buffers=64MB  -c work_mem=2MB
+      postgres  -c max_connections=20  -c shared_buffers=32MB  -c work_mem=2MB
     ports:
       - "5436:5432"
     expose:
@@ -128,9 +128,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
         reservations:
-          memory: 64M
+          memory: 32M
     networks:
       - global-network-geosandbox
 
@@ -138,7 +138,7 @@ services:
     image: redis:latest
     container_name: geosandbox_redis
     restart: always
-    command: redis-server --requirepass secretredispassword --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass secretredispassword --maxmemory 64mb --maxmemory-policy allkeys-lru
     ports:
       - "6381:6379"
     expose:
@@ -153,9 +153,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
         reservations:
-          memory: 64M
+          memory: 32M
     networks:
       - global-network-geosandbox
 
@@ -173,9 +173,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 192M
         reservations:
-          memory: 128M
+          memory: 64M
     networks:
       - global-network-geosandbox
 
