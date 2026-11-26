@@ -71,7 +71,7 @@ jobs:
           sudo mkdir -p "$PROJECT_PATH"
           sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_PATH"
           rsync -a --delete "${GITHUB_WORKSPACE}/" "$PROJECT_PATH/"
-          chmod 600 "$PROJECT_PATH/db/password.txt"
+          chmod 644 "$PROJECT_PATH/db/password.txt"
 
       - name: Ensure shared Docker network
         shell: bash
