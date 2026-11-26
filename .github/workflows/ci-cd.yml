@@ -6,3 +6,189 @@ on:
   pull_request:
     branches: [ development ]
   workflow_dispatch:
+
+env:
+  PROJECT_PATH: /opt/geosandbox-database-s3
+  DOCKER_NETWORK: global-network-geosandbox
+  DOMAIN_BASE: gepsandbox-global-infra.com
+  STORAGE_API_SUBDOMAIN: s3
+  STORAGE_CONSOLE_SUBDOMAIN: storage
+
+jobs:
+  validate:
+    name: Validate Database & Storage Infrastructure
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required tools
+        shell: bash
+        run: |
+          set -e
+          command -v docker
+          docker --version
+          docker compose version
+
+      - name: Verify database secret file
+        shell: bash
+        run: |
+          set -e
+          if [ ! -s "${GITHUB_WORKSPACE}/db/password.txt" ]; then
+            echo "Error: db/password.txt is missing or empty."
+            exit 1
+          fi
+
+      - name: Ensure shared Docker network for validation
+        shell: bash
+        run: |
+          set -e
+          docker network inspect "$DOCKER_NETWORK" >/dev/null 2>&1 || docker network create "$DOCKER_NETWORK"
+
+      - name: Validate Root Docker Compose (compose.yaml)
+        shell: bash
+        run: |
+          set -e
+          echo "Validating compose.yaml for databases, redis, and storage..."
+          docker compose -f compose.yaml config > /tmp/compose-check.txt
+
+  deploy:
+    name: Deploy to Self-Hosted VM
+    needs: validate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/development'
+    runs-on: self-hosted
+    environment: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare deployment directory
+        shell: bash
+        run: |
+          set -e
+          sudo mkdir -p "$PROJECT_PATH"
+          sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_PATH"
+          rsync -a --delete "${GITHUB_WORKSPACE}/" "$PROJECT_PATH/"
+          chmod 600 "$PROJECT_PATH/db/password.txt"
+
+      - name: Ensure shared Docker network
+        shell: bash
+        run: |
+          set -e
+          docker network inspect "$DOCKER_NETWORK" >/dev/null 2>&1 || docker network create "$DOCKER_NETWORK"
+
+      - name: Deploy Database & S3 Storage from Root compose.yaml
+        working-directory: ${{ env.PROJECT_PATH }}
+        shell: bash
+        run: |
+          set -e
+          docker compose -f compose.yaml up -d --remove-orphans
+
+      - name: Configure reverse proxy subdomains
+        shell: bash
+        run: |
+          set -e
+          if command -v nginx >/dev/null 2>&1; then
+            sudo mkdir -p /etc/nginx/conf.d
+            sudo tee /etc/nginx/conf.d/geosandbox-database-s3.conf >/dev/null <<EOF
+          server {
+              listen 80;
+              server_name ${STORAGE_API_SUBDOMAIN}.${DOMAIN_BASE};
+              client_max_body_size 100M;
+
+              location / {
+                  proxy_pass http://127.0.0.1:8980;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+
+          server {
+              listen 80;
+              server_name ${STORAGE_CONSOLE_SUBDOMAIN}.${DOMAIN_BASE};
+              client_max_body_size 100M;
+
+              location / {
+                  proxy_pass http://127.0.0.1:9710;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          EOF
+            sudo nginx -t
+            sudo nginx -s reload || sudo systemctl reload nginx
+          else
+            echo "nginx not installed; skipping reverse proxy configuration."
+          fi
+
+      - name: Health checks
+        shell: bash
+        run: |
+          set -e
+          wait_for_postgres() {
+            local container="$1"
+            local dbname="$2"
+            local attempts=30
+
+            echo "Waiting for PostgreSQL container '${container}' (DB: ${dbname})..."
+            for ((attempt = 1; attempt <= attempts; attempt++)); do
+              if docker exec "$container" pg_isready -U postgres -d "$dbname" >/dev/null 2>&1; then
+                echo "${container} (${dbname}) is ready"
+                return 0
+              fi
+              sleep 3
+            done
+
+            echo "${container} did not become ready after $((attempts * 3)) seconds"
+            return 1
+          }
+
+          wait_for_redis() {
+            local container="$1"
+            local attempts=30
+
+            echo "Waiting for Redis container '${container}'..."
+            for ((attempt = 1; attempt <= attempts; attempt++)); do
+              if docker exec "$container" redis-cli -a secretredispassword ping 2>/dev/null | grep -q "PONG"; then
+                echo "${container} is ready"
+                return 0
+              fi
+              sleep 3
+            done
+
+            echo "${container} did not become ready after $((attempts * 3)) seconds"
+            return 1
+          }
+
+          wait_for_storage() {
+            local container="$1"
+            local url="$2"
+            local attempts=30
+
+            echo "Waiting for RustFS Storage '${container}' at ${url}..."
+            for ((attempt = 1; attempt <= attempts; attempt++)); do
+              if [ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null)" = "true" ] && \
+                 curl --silent --output /dev/null "$url"; then
+                echo "${container} is ready"
+                return 0
+              fi
+              sleep 3
+            done
+
+            echo "${container} did not become ready after $((attempts * 3)) seconds"
+            return 1
+          }
+
+          wait_for_postgres "gis_service_db" "db_gis_geosandbox"
+          wait_for_postgres "auth_service_db" "db_auth_geosandbox"
+          wait_for_postgres "user_service_db" "db_user_geosandbox"
+          wait_for_postgres "notif_service_db" "db_notif_geosandbox"
+          wait_for_redis "geosandbox_redis"
+          wait_for_storage "geosandbox_storage" "http://127.0.0.1:9710"
+          echo "Database & S3 Storage deployment completed successfully."
